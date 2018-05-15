@@ -1,0 +1,49 @@
+#!/usr/bin/perl
+
+# thanks to http://www.perlmonks.org/?node_id=136390 for some hints
+
+use strict;
+use warnings;
+
+use Data::Dumper;
+
+use Socket qw(inet_ntoa);
+use Net::DNS::Resolver;
+use Net::DNS::Packet;
+
+my ($domain) = @ARGV;
+
+# get root servers
+my $res = new Net::DNS::Resolver;
+print "getting root servers...\n";
+my %root_servers;
+foreach my $root_letter (qw(a b c d e f g h i j k l m)) {
+	my $root_server = "${root_letter}.root-servers.net";
+	my $res_packet = $res->query($root_server);
+	my ($rr) = $res_packet->answer;
+	my $ttl = $rr->{ttl};
+	my $address = inet_ntoa($rr->{address});
+	$root_servers{$root_server} = $address;
+}
+print Dumper(\%root_servers);
+
+print "checking $domain\n";
+
+# what name servers do the root servers give out for it?
+foreach my $root_server (sort keys %root_servers) {
+	print "looking up $domain at $root_server\n";
+	my $root_res = new Net::DNS::Resolver( nameservers => [ $root_servers{$root_server} ] );
+	my $res_packet = $root_res->send($domain);
+	if (defined $res_packet) {
+		print Dumper($res_packet);
+		foreach my $rr ($res_packet->authority) {
+			print $rr->string, "\n";
+		}
+		die "debug";
+	} else {
+		print $root_res->print;
+		print "\tundef\n";
+	}
+}
+
+__END__
