@@ -48,6 +48,8 @@ check_authoritative($res,\%auth_servers,$domain,'www');
 
 # TODO: make sure the MXs don't point to CNAMEs
 
+print "\nNo problems found for $domain\n";
+
 sub check_authoritative {
 	my ($res,$auth_res,$domain,$check) = @_;
 
@@ -67,7 +69,7 @@ sub check_authoritative {
 		my $res_packet = $check_res->send($domain);
 		if (defined $res_packet) {
 			my ($rr) = $res_packet->answer;
-			if (defined $rr and $rr->{type} eq 'A') {
+			if (defined $rr and $rr->type eq 'A') {
 				my $ttl = $rr->{ttl};
 				my $address = inet_ntoa($rr->{address});
 				unless (defined $first_address) {
