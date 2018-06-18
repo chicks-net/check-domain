@@ -60,7 +60,7 @@ sub check_authoritative {
 
 	my @issues;
 	my $first_address;
-	foreach my $auth (keys %$auth_res) {
+	foreach my $auth (sort keys %$auth_res) {
 		my $ns_ip = $auth_res->{$auth};
 		print "checking $full_check on $auth/$ns_ip\n";
 		my $check_res = new Net::DNS::Resolver( nameservers => [ $ns_ip ] );
@@ -76,13 +76,13 @@ sub check_authoritative {
 					unless ($address eq $first_address) {
 						my $issue = "got $address, but expected $first_address from $auth/$ns_ip";
 						push(@issues,$issue);
-						warn $issue;
+						#warn $issue;
 					}
 				}
 			} else {
 				my $issue = "no adddress from $auth/$ns_ip";
 				push(@issues,$issue);
-				warn $issue;
+				#warn $issue;
 			}
 		} else {
 			print($check_res->print);
