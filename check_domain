@@ -25,25 +25,121 @@ foreach my $root_letter (qw(a b c d e f g h i j k l m)) {
 	my $address = inet_ntoa($rr->{address});
 	$root_servers{$root_server} = $address;
 }
-print Dumper(\%root_servers);
+#print Dumper(\%root_servers);
+my $root_count = scalar keys %root_servers;
 
-print "checking $domain\n";
+print "checking $domain in $root_count root servers\n";
 
 # what name servers do the root servers give out for it?
-foreach my $root_server (sort keys %root_servers) {
-	print "looking up $domain at $root_server\n";
-	my $root_res = new Net::DNS::Resolver( nameservers => [ $root_servers{$root_server} ] );
-	my $res_packet = $root_res->send($domain);
-	if (defined $res_packet) {
-		print Dumper($res_packet);
-		foreach my $rr ($res_packet->authority) {
-			print $rr->string, "\n";
-		}
-		die "debug";
+print "getting TLD servers...\n";
+my %tld_servers = getNS($res,\%root_servers);
+print Dumper(\%tld_servers);
+
+# check domain against GTLD servers
+print "getting authoritative servers...\n";
+my %auth_servers = getNS($res,\%tld_servers);
+print Dumper(\%auth_servers);
+
+# chech authoritive servers for root
+check_authoritative($res,\%auth_servers,$domain,'');
+
+# chech authoritive servers for www
+check_authoritative($res,\%auth_servers,$domain,'www');
+
+# TODO: make sure the MXs don't point to CNAMEs
+
+sub check_authoritative {
+	my ($res,$auth_res,$domain,$check) = @_;
+
+	my $full_check;
+	if ( length $check ) {
+		$full_check = "${check}.$domain";
 	} else {
-		print $root_res->print;
-		print "\tundef\n";
+		$full_check = $domain;
 	}
+
+	my @issues;
+	my $first_address;
+	foreach my $auth (keys %$auth_res) {
+		my $ns_ip = $auth_res->{$auth};
+		print "checking $full_check on $auth/$ns_ip\n";
+		my $check_res = new Net::DNS::Resolver( nameservers => [ $ns_ip ] );
+		my $res_packet = $check_res->send($domain);
+		if (defined $res_packet) {
+			my ($rr) = $res_packet->answer;
+			my $ttl = $rr->{ttl};
+			my $address = inet_ntoa($rr->{address});
+			unless (defined $first_address) {
+				$first_address = $address
+			} else {
+				unless ($address eq $first_address) {
+					my $issue = "got $address, but expected $first_address from $auth/$ns_ip";
+					push(@issues,$issue);
+					warn $issue;
+				}
+			}
+		} else {
+			print($check_res->print);
+			die "shouldn't get here";
+		}
+	}
+
+	if (scalar @issues) {
+		warn "\nIssues:\n- " . join("\n- ", @issues) . "\n";
+		die "fix above issues before more checks are attempted";
+	}
+}
+
+sub getA {
+	my ($resolver,$lookup) = @_;
+	my $res_packet = $resolver->query($lookup);
+	my ($rr) = $res_packet->answer;
+	my $ttl = $rr->{ttl};
+	my $address = inet_ntoa($rr->{address});
+	#print "returning $address for $lookup\n";
+	return $address;
+}
+
+sub getNS {
+	my ($res, $check_servers) = @_;
+
+	my $check_count = scalar keys %$check_servers;
+
+	my %authoritative_servers;
+	my %authority_count;
+	foreach my $root_server (sort keys %$check_servers) {
+		#print "looking up $domain at $root_server\n";
+		my $root_res = new Net::DNS::Resolver( nameservers => [ $check_servers->{$root_server} ] );
+		my $res_packet = $root_res->send($domain);
+		if (defined $res_packet) {
+			foreach my $rr ($res_packet->authority) {
+				my $type = $rr->type;
+				if ($type eq 'NS') {
+					my $authoritative_ns = $rr->nsdname;
+					my $authoritative_ns_addr = getA($res, $authoritative_ns);
+					$authoritative_servers{$authoritative_ns} = $authoritative_ns_addr;
+					$authority_count{$authoritative_ns} ++;
+					#print "$tld_ns -> $tld_ns_addr\n";
+					#print $rr->string, "\n";
+				} elsif ($type eq 'SOA') {
+					die "domain not found in root server $root_server";
+				} else {
+					print "\tunknown type $type\n";
+				}
+			}
+		} else {
+			print $root_res->print;
+			print "\tundef\n";
+		}
+	}
+
+	# check result counts
+	foreach my $authority (keys %authority_count) {
+		my $auth_count = $authority_count{$authority};
+		warn "result count mismatch ($auth_count != $check_count)" unless $auth_count == $check_count;
+	}
+
+	return(%authoritative_servers);
 }
 
 __END__
