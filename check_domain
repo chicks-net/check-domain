@@ -67,16 +67,22 @@ sub check_authoritative {
 		my $res_packet = $check_res->send($domain);
 		if (defined $res_packet) {
 			my ($rr) = $res_packet->answer;
-			my $ttl = $rr->{ttl};
-			my $address = inet_ntoa($rr->{address});
-			unless (defined $first_address) {
-				$first_address = $address
-			} else {
-				unless ($address eq $first_address) {
-					my $issue = "got $address, but expected $first_address from $auth/$ns_ip";
-					push(@issues,$issue);
-					warn $issue;
+			if (defined $rr and $rr->{type} eq 'A') {
+				my $ttl = $rr->{ttl};
+				my $address = inet_ntoa($rr->{address});
+				unless (defined $first_address) {
+					$first_address = $address
+				} else {
+					unless ($address eq $first_address) {
+						my $issue = "got $address, but expected $first_address from $auth/$ns_ip";
+						push(@issues,$issue);
+						warn $issue;
+					}
 				}
+			} else {
+				my $issue = "no adddress from $auth/$ns_ip";
+				push(@issues,$issue);
+				warn $issue;
 			}
 		} else {
 			print($check_res->print);
