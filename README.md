@@ -1,5 +1,8 @@
 # check-domain
 
+[![GPLv2 license](https://img.shields.io/badge/License-GPLv2-blue.svg)](https://github.com/chicks-net/check-domain/blob/master/LICENSE)
+[![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/chicks-net/check-domain/graphs/commit-activity)
+
 Check a domain for registration and DNS issues
 
 ## Usage
